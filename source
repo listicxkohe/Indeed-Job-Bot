@@ -1,0 +1,242 @@
+// ==UserScript==
+// @name         Enhanced GUI Script for Indeed Australia
+// @namespace    http://tampermonkey.net/
+// @version      0.1
+// @description  job bot
+// @author       Kohe
+// @match        https://au.indeed.com/*
+// @grant        GM_addStyle
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // Create GUI elements
+    const guiContainer = document.createElement('div');
+    guiContainer.id = 'myGuiContainer';
+    guiContainer.style.position = 'fixed';
+    guiContainer.style.top = '50px';
+    guiContainer.style.left = '50px';
+    guiContainer.style.width = '300px'; // Initial width
+    guiContainer.style.height = 'auto'; // Auto height
+    guiContainer.style.maxHeight = '80vh'; // Limit max height
+    guiContainer.style.overflow = 'auto'; // Enable vertical scrolling
+    guiContainer.style.background = 'black';
+    guiContainer.style.border = '2px solid #00ff00';
+    guiContainer.style.borderRadius = '10px';
+    guiContainer.style.zIndex = '9999';
+    guiContainer.style.cursor = 'move';
+    guiContainer.draggable = true;
+
+    // Handle drag-and-drop functionality
+    let isDragging = false;
+    let offsetX, offsetY;
+
+    function handleDragStart(e) {
+        isDragging = true;
+        offsetX = e.clientX - guiContainer.getBoundingClientRect().left;
+        offsetY = e.clientY - guiContainer.getBoundingClientRect().top;
+
+        document.addEventListener('mousemove', handleDragMove);
+        document.addEventListener('mouseup', handleDragEnd);
+
+        function handleDragMove(e) {
+            if (isDragging) {
+                const x = e.clientX - offsetX;
+                const y = e.clientY - offsetY;
+
+                guiContainer.style.left = `${x}px`;
+                guiContainer.style.top = `${y}px`;
+            }
+        }
+
+        function handleDragEnd() {
+            isDragging = false;
+            document.removeEventListener('mousemove', handleDragMove);
+            document.removeEventListener('mouseup', handleDragEnd);
+        }
+    }
+
+    guiContainer.addEventListener('mousedown', handleDragStart);
+
+    // Title styling
+    const title = document.createElement('div');
+    title.style.color = '#00ff00';
+    title.style.fontWeight = 'bold';
+    title.style.textAlign = 'center';
+    title.style.margin = '10px 0';
+    title.style.fontSize = '24px'; // Make the title bigger
+    title.style.textShadow = '2px 2px 4px #006400'; // Add shadow to make it stand out
+    title.innerText = 'JobHuntMaster3000';
+
+    // Start button
+    const startButton = document.createElement('button');
+    startButton.innerText = 'Start';
+    startButton.style.margin = '10px';
+    startButton.style.padding = '8px';
+    startButton.style.cursor = 'pointer';
+    startButton.style.border = '2px solid #00ff00';
+    startButton.style.borderRadius = '5px';
+    startButton.style.background = 'black';
+    startButton.style.color = '#00ff00';
+    startButton.addEventListener('click', startLoop);
+
+    // Stop button
+    const stopButton = document.createElement('button');
+    stopButton.innerText = 'Stop';
+    stopButton.style.margin = '10px';
+    stopButton.style.padding = '8px';
+    stopButton.style.cursor = 'pointer';
+    stopButton.style.border = '2px solid #00ff00';
+    stopButton.style.borderRadius = '5px';
+    stopButton.style.background = 'black';
+    stopButton.style.color = '#00ff00';
+    stopButton.addEventListener('click', stopLoop);
+
+    // Status display
+    const statusDisplay = document.createElement('div');
+    statusDisplay.id = 'statusDisplay';
+    statusDisplay.style.margin = '10px';
+    statusDisplay.style.fontWeight = 'bold';
+    statusDisplay.innerText = 'Status: Stopped';
+
+    // Label for the jobs found
+    const labelJobsFound = document.createElement('div');
+    labelJobsFound.id = 'labelJobsFound';
+    labelJobsFound.style.color = '#00ff00';
+    labelJobsFound.style.margin = '10px';
+    labelJobsFound.style.fontWeight = 'bold';
+    labelJobsFound.innerText = 'Jobs found:';
+
+    // Display for job titles
+    const jobsDisplay = document.createElement('div');
+    jobsDisplay.id = 'jobsDisplay';
+    jobsDisplay.style.color = 'white'; // Text inside the scrollbox is white
+    jobsDisplay.style.margin = '0 10px';
+    jobsDisplay.style.maxHeight = '150px';
+    jobsDisplay.style.overflowY = 'auto';
+    jobsDisplay.style.border = '2px solid #00ff00';
+    jobsDisplay.style.borderRadius = '5px';
+    jobsDisplay.style.background = 'black';
+
+    // Processing display
+    const processingDisplay = document.createElement('div');
+    processingDisplay.id = 'processingDisplay';
+    processingDisplay.style.color = 'white'; // Text is white
+    processingDisplay.style.margin = '10px';
+    processingDisplay.style.fontWeight = 'bold';
+    processingDisplay.innerHTML = '<strong>Processing job:</strong> N/A<br><strong>Next job in:</strong> N/A';
+
+    // Append GUI elements to the container
+    guiContainer.appendChild(title);
+    guiContainer.appendChild(startButton);
+    guiContainer.appendChild(stopButton);
+    guiContainer.appendChild(statusDisplay);
+    guiContainer.appendChild(labelJobsFound);
+    guiContainer.appendChild(jobsDisplay);
+    guiContainer.appendChild(processingDisplay);
+
+    // Append container to the body
+    document.body.appendChild(guiContainer);
+
+    let isRunning = false;
+    let stopLoopFlag = false;
+    let currentTitleIndex = 0;
+    let nextClickTimer = null;
+
+    GM_addStyle(`
+        #myGuiContainer button:hover {
+            background-color: #007700 !important;
+        }
+
+        #myGuiContainer #statusDisplay {
+            color: #ff0000; /* Red for Stopped */
+        }
+
+        #myGuiContainer #statusDisplay.running {
+            color: #00aa00; /* A different shade of green for Running */
+        }
+
+        #myGuiContainer #jobsDisplay span {
+            color: #00ff00; /* Green numbers */
+        }
+
+        #myGuiContainer #jobsDisplay::-webkit-scrollbar {
+            width: 12px;
+            background-color: #111; /* Lighter shade of black for scrollbar background */
+        }
+
+        #myGuiContainer #jobsDisplay::-webkit-scrollbar-thumb {
+            background-color: #00ff00; /* Green color for scrollbar thumb */
+        }
+    `);
+
+    // Function to start the loop
+    function startLoop() {
+        if (!isRunning) {
+            isRunning = true;
+            statusDisplay.innerText = 'Status: Running';
+            statusDisplay.classList.add('running');
+
+            const titleElements = document.querySelectorAll('span[id*=jobTitle]');
+            let titlesText = '';
+
+            titleElements.forEach((titleElement, index) => {
+                titlesText += `<span>${index + 1}. ${titleElement.innerText}</span><br>`;
+            });
+
+            jobsDisplay.innerHTML = titlesText;
+
+            stopLoopFlag = false;
+            currentTitleIndex = 0;
+
+            function clickTitlesInLoop() {
+                if (stopLoopFlag || currentTitleIndex >= titleElements.length) {
+                    isRunning = false;
+                    statusDisplay.innerText = 'Status: Stopped';
+                    statusDisplay.classList.remove('running');
+                    clearInterval(nextClickTimer);
+                    nextClickTimer = null;
+                    return;
+                }
+
+                const currentTitleElement = titleElements[currentTitleIndex];
+                if (currentTitleElement) {
+                    processingDisplay.innerHTML = `<strong>Processing job:</strong> ${currentTitleElement.innerText}<br><strong>Next job in:</strong> ${getRandomDelay()}s`;
+
+                    currentTitleElement.click();
+
+                    let countdown = getRandomDelay();
+                    nextClickTimer = setInterval(() => {
+                        countdown--;
+                        processingDisplay.innerHTML = `<strong>Processing job:</strong> ${currentTitleElement.innerText}<br><strong>Next job in:</strong> ${countdown}s`;
+
+                        if (countdown === 0) {
+                            clearInterval(nextClickTimer);
+                            nextClickTimer = null;
+                            currentTitleIndex++;
+                            setTimeout(clickTitlesInLoop, 0);
+                        }
+                    }, 1000);
+                } else {
+                    isRunning = false;
+                    statusDisplay.innerText = 'Status: Stopped';
+                    statusDisplay.classList.remove('running');
+                }
+            }
+
+            // Trigger the first click immediately
+            clickTitlesInLoop();
+        }
+    }
+
+    // Function to stop the loop
+    function stopLoop() {
+        stopLoopFlag = true;
+    }
+
+    // Function to get a random delay between 10-20 seconds
+    function getRandomDelay() {
+        return Math.floor(Math.random() * (20 - 10 + 1) + 10);
+    }
+})();
